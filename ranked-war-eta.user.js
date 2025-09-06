@@ -40,22 +40,23 @@
             }
         }
         
-        if (viewGraphExists && !etaDisplayAdded) {
-            // Add click listener to "View graph" element
-            viewGraphNode.parentElement.addEventListener('click', () => {
-                // Wait for the table to load after click
-                setTimeout(() => {
-                    calculateAndDisplayWarEnd(viewGraphNode);
-                }, 500);
-            });
-            
-            etaDisplayAdded = true;
-            return true;
-        } else if (!viewGraphExists && etaDisplayAdded) {
+        if (!viewGraphExists && etaDisplayAdded) {
             etaDisplayAdded = false;
+            return false;
         }
         
-        return false;
+        if (!viewGraphExists || etaDisplayAdded) {
+            return false;
+        }
+        
+        viewGraphNode.parentElement.addEventListener('click', () => {
+            setTimeout(() => {
+                calculateAndDisplayWarEnd(viewGraphNode);
+            }, 500);
+        });
+        
+        etaDisplayAdded = true;
+        return true;
     }
     
     function calculateAndDisplayWarEnd(viewGraphNode) {
@@ -69,43 +70,39 @@
         const currentScores = getCurrentScores();
         const initialTarget = getInitialTargetScore();
         
-        // Calculate when war will end
-        if (currentScores && initialTarget) {
-            const decayRate = Math.round(initialTarget * 0.01);
-            const difference = currentScores.target - currentScores.current;
-            const hoursToEnd = difference / decayRate;
-            
-            // Calculate exact end time
-            const now = new Date();
-            const endTime = new Date(now.getTime() + hoursToEnd * 60 * 60 * 1000);
-            
-            // Round up to the next hour
-            const roundedEndTime = new Date(endTime);
-            if (roundedEndTime.getMinutes() > 0 || roundedEndTime.getSeconds() > 0) {
-                roundedEndTime.setHours(roundedEndTime.getHours() + 1);
-            }
-            roundedEndTime.setMinutes(0, 0, 0);
-            
-            // Format the display
-            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const dayName = days[roundedEndTime.getDay()];
-            const hours = roundedEndTime.getHours().toString().padStart(2, '0');
-            const day = roundedEndTime.getDate().toString().padStart(2, '0');
-            const month = (roundedEndTime.getMonth() + 1).toString().padStart(2, '0');
-            const year = roundedEndTime.getFullYear().toString().slice(-2);
-            
-            const etaString = `War ends: ${dayName} ${hours}:00:00 - ${day}/${month}/${year} (${hoursToEnd.toFixed(1)}h) `;
-            
-            // Create and display the ETA element
-            const etaElement = document.createElement('span');
-            etaElement.textContent = etaString;
-            etaElement.style.fontWeight = 'bold';
-            etaElement.style.color = 'red';
-            etaElement.id = 'war-end-marker';
-            
-            // Insert before the "View graph" span
-            viewGraphNode.parentElement.insertBefore(etaElement, viewGraphNode.parentElement.firstChild);
+        if (!currentScores || !initialTarget) {
+            return;
         }
+        
+        const decayRate = Math.round(initialTarget * 0.01);
+        const difference = currentScores.target - currentScores.current;
+        const hoursToEnd = difference / decayRate;
+        
+        const now = new Date();
+        const endTime = new Date(now.getTime() + hoursToEnd * 60 * 60 * 1000);
+        
+        const roundedEndTime = new Date(endTime);
+        if (roundedEndTime.getMinutes() > 0 || roundedEndTime.getSeconds() > 0) {
+            roundedEndTime.setHours(roundedEndTime.getHours() + 1);
+        }
+        roundedEndTime.setMinutes(0, 0, 0);
+        
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayName = days[roundedEndTime.getDay()];
+        const hours = roundedEndTime.getHours().toString().padStart(2, '0');
+        const day = roundedEndTime.getDate().toString().padStart(2, '0');
+        const month = (roundedEndTime.getMonth() + 1).toString().padStart(2, '0');
+        const year = roundedEndTime.getFullYear().toString().slice(-2);
+        
+        const etaString = `War ends: ${dayName} ${hours}:00:00 - ${day}/${month}/${year} (${hoursToEnd.toFixed(1)}h) `;
+        
+        const etaElement = document.createElement('span');
+        etaElement.textContent = etaString;
+        etaElement.style.fontWeight = 'bold';
+        etaElement.style.color = 'red';
+        etaElement.id = 'war-end-marker';
+        
+        viewGraphNode.parentElement.insertBefore(etaElement, viewGraphNode.parentElement.firstChild);
     }
     
     function getCurrentScores() {
@@ -153,15 +150,19 @@
                 continue;
             }
             
-            if (foundLeadTarget) {
-                const text = node.textContent.trim();
-                if (/^\d{1,3}(,\d{3})*$/.test(text)) {
-                    const numberValue = parseInt(text.replace(/,/g, ''));
-                    numbers.push(numberValue);
-                    
-                    if (numbers.length >= 2) break;
-                }
+            if (!foundLeadTarget) {
+                continue;
             }
+            
+            const text = node.textContent.trim();
+            if (!/^\d{1,3}(,\d{3})*$/.test(text)) {
+                continue;
+            }
+            
+            const numberValue = parseInt(text.replace(/,/g, ''));
+            numbers.push(numberValue);
+            
+            if (numbers.length >= 2) break;
         }
         
         if (numbers.length >= 2) {
@@ -173,42 +174,49 @@
     
     function getInitialTargetScore() {
         const factionMain = document.querySelector('div#faction-main');
-        
         if (!factionMain) {
             return null;
         }
         
-        // Find the table with the graph data
         const tables = factionMain.querySelectorAll('table');
         
         for (let table of tables) {
             const thead = table.querySelector('thead');
-            if (thead) {
-                const headerCells = thead.querySelectorAll('th');
-                const headers = Array.from(headerCells).map(h => h.textContent.trim());
-                
-                // Look for the table with Target and Green area columns
-                if (headers.includes('Target') && headers.includes('Green area')) {
-                    const tbody = table.querySelector('tbody');
-                    if (tbody) {
-                        const firstRow = tbody.querySelector('tr');
-                        if (firstRow) {
-                            const cells = firstRow.querySelectorAll('td');
-                            
-                            // Find the Target column (position 1 based on analysis)
-                            const targetIndex = headers.indexOf('Target');
-                            if (targetIndex >= 0 && cells[targetIndex]) {
-                                const targetText = cells[targetIndex].textContent.trim();
-                                if (targetText) {
-                                    const target = parseInt(targetText.replace(/,/g, ''));
-                                    return target;
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
+            if (!thead) {
+                continue;
             }
+            
+            const headerCells = thead.querySelectorAll('th');
+            const headers = Array.from(headerCells).map(h => h.textContent.trim());
+            
+            if (!headers.includes('Target') || !headers.includes('Green area')) {
+                continue;
+            }
+            
+            const tbody = table.querySelector('tbody');
+            if (!tbody) {
+                break;
+            }
+            
+            const firstRow = tbody.querySelector('tr');
+            if (!firstRow) {
+                break;
+            }
+            
+            const cells = firstRow.querySelectorAll('td');
+            const targetIndex = headers.indexOf('Target');
+            
+            if (targetIndex < 0 || !cells[targetIndex]) {
+                break;
+            }
+            
+            const targetText = cells[targetIndex].textContent.trim();
+            if (!targetText) {
+                break;
+            }
+            
+            const target = parseInt(targetText.replace(/,/g, ''));
+            return target;
         }
         
         return null;
